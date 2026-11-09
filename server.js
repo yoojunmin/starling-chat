@@ -169,6 +169,20 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && url.pathname === '/event') {
+    try {
+      const body = await readBody(req);
+      const allowed = new Set(['volcano', 'meteor', 'flood', 'tnt']);
+      if (!allowed.has(body.type)) return send(res, 400, '이벤트 종류를 확인해 주세요.');
+      history.length = 0;
+      const event = { id: crypto.randomUUID(), type: body.type, time: Date.now() };
+      publish('world-event', event);
+      return send(res, 200, JSON.stringify({ ok: true }), 'application/json; charset=utf-8');
+    } catch {
+      return send(res, 400, '이벤트 요청을 확인해 주세요.');
+    }
+  }
+
   send(res, 404, 'Not found');
 });
 
