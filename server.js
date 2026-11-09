@@ -59,6 +59,17 @@ function cleanFileName(value) {
   return name || 'image';
 }
 
+function safeImageUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    if (!/\.(?:gif|png|jpe?g|webp)$/i.test(url.pathname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function rememberMedia(buffer, type, name) {
   while (mediaBytes + buffer.length > MAX_MEDIA_BYTES && media.size) {
     const oldestId = media.keys().next().value;
@@ -137,14 +148,17 @@ const server = http.createServer(async (req, res) => {
       const name = String(body.name || '').trim().replace(/[<>]/g, '').slice(0, 24);
       const text = String(body.text || '').trim().slice(0, MAX_MESSAGE);
       const attachment = body.mediaId ? media.get(String(body.mediaId)) : null;
-      if (!name || (!text && !attachment)) return send(res, 400, '닉네임과 메시지 또는 사진을 입력해 주세요.');
+      const mediaUrl = body.mediaUrl ? safeImageUrl(body.mediaUrl) : null;
+      if (!name || (!text && !attachment && !mediaUrl)) return send(res, 400, '닉네임과 메시지 또는 사진을 입력해 주세요.');
       if (body.mediaId && !attachment) return send(res, 410, '사진 업로드가 만료되었습니다. 다시 첨부해 주세요.');
+      if (body.mediaUrl && !mediaUrl) return send(res, 415, 'GIF 또는 이미지 파일을 직접 가리키는 링크를 넣어 주세요.');
       const message = {
         id: crypto.randomUUID(),
         name,
         text,
         time: Date.now(),
-        ...(attachment ? { media: '/media/' + attachment.id, mediaName: attachment.name } : {})
+        ...(attachment ? { media: '/media/' + attachment.id, mediaName: attachment.name } : {}),
+        ...(mediaUrl ? { mediaUrl, mediaName: '온라인 이미지' } : {})
       };
       history.push(message);
       if (history.length > MAX_HISTORY) history.shift();
